@@ -1,53 +1,62 @@
 const BASE_URL = 'http://localhost:3001/proxy/https://deltaskyhopper.com';
 
-// Helper to load, patch, and import a remote scene by name
-async function loadRemoteScene(sceneName) {
-  const remoteUrl = `${BASE_URL}/src/scenes/${sceneName}.js`;
-  console.log('Fetching and patching', sceneName, 'from', remoteUrl);
-  let src = await (await fetch(remoteUrl)).text();
-  src = rewriteImports(src, '/src/scenes');
-  const blob = new Blob([src], { type: 'application/javascript' });
-  const blobUrl = URL.createObjectURL(blob);
+async function importFromSource(source) {
+  const blob = new Blob([source], { type: 'application/javascript' });
+  const url = URL.createObjectURL(blob);
   try {
-    return (await import(/* @vite-ignore */ blobUrl)).default;
+    return await import(/* @vite-ignore */ url);
   } finally {
-    URL.revokeObjectURL(blobUrl);
+    URL.revokeObjectURL(url);
   }
 }
 
-async function initGame() {
-  const ApiCheck = await loadRemoteScene('APICheck');
-  const ErrorScene = await loadRemoteScene('ErrorScene');
-  const StartScreen = await loadRemoteScene('StartScreen');
-  const SelectPlayer = await loadRemoteScene('SelectPlayer');
-  const SelectStage = await loadRemoteScene('SelectStage');
-  const SplashScreen = await loadRemoteScene('SplashScreen');
-  const TutorialScreen = await loadRemoteScene('TutorialScreen');
-  const Game = await loadRemoteScene('Game');
-  const GameOver = await loadRemoteScene('GameOver');
+async function fetchAndImportPatchedModule(remoteUrl, sceneDir = '/src/scenes') {
+  let src = await (await fetch(remoteUrl)).text();
+  src = await rewriteImports(src, sceneDir);
+  const mod = await importFromSource(src);
+  return mod;
+}
 
+// Load a single remote scene (returns the scene class/module default export)
+async function loadRemoteScene(sceneName) {
+  const remoteUrl = `${BASE_URL}/src/scenes/${sceneName}.js`;
+  console.log('Fetching scene', sceneName, remoteUrl);
+  const mod = await fetchAndImportPatchedModule(remoteUrl, '/src/scenes');
+  return mod.default;
+}
+
+async function initGame() {
+  // Load scenes in the original logical order, then arrange for Phaser
+  const sceneLoadOrder = [
+    'APICheck',
+    'ErrorScene',
+    'StartScreen',
+    'SelectPlayer',
+    'SelectStage',
+    'SplashScreen',
+    'TutorialScreen',
+    'Game',
+    'GameOver',
+  ];
+
+  const loaded = await Promise.all(sceneLoadOrder.map(name => loadRemoteScene(name)));
+  const [ApiCheck, ErrorScene, StartScreen, SelectPlayer, SelectStage, SplashScreen, TutorialScreen, Game, GameOver] =
+    loaded;
+
+  // Import game utilities directly from the proxied URL
   const { GAME_HEIGHT, GAME_WIDTH, isDaytime } = await import(/* @vite-ignore */ `${BASE_URL}/src/game/utils.js`);
 
-  const resizeRemoteUrl = 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/resize.js';
-  let onResize;
+  // Load and patch resize module using helpers
+  const resizeRemoteUrl = `${BASE_URL}/src/game/resize.js`;
   let resizeSrc = await (await fetch(resizeRemoteUrl)).text();
   resizeSrc = resizeSrc.replace(
-    'import { GAME_HEIGHT, GAME_WIDTH } from "utils";',
-    'import { GAME_HEIGHT, GAME_WIDTH } from "http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/utils.js";'
+    /import\s+\{\s*GAME_HEIGHT\s*,\s*GAME_WIDTH\s*\}\s+from\s+['"]utils['"];?/, // tolerant match
+    `import { GAME_HEIGHT, GAME_WIDTH } from "${BASE_URL}/src/game/utils.js";`
   );
-  const resizeBlob = new Blob([resizeSrc], { type: 'application/javascript' });
-  const resizeBlobUrl = URL.createObjectURL(resizeBlob);
-  try {
-    const ResizeModule = await import(/* @vite-ignore */ resizeBlobUrl);
-    onResize = ResizeModule.onResize;
-  } finally {
-    URL.revokeObjectURL(resizeBlobUrl);
-  }
+  const ResizeModule = await importFromSource(resizeSrc);
+  const onResize = ResizeModule.onResize;
 
-  /**
-   * added to remove context menu on iOS and Android when the user
-   * longpresses a non canvas area
-   */
+  // Prevent long-press context menu on mobile non-canvas areas
   document.oncontextmenu = e => {
     e.preventDefault();
     e.stopPropagation();
@@ -55,21 +64,12 @@ async function initGame() {
     return false;
   };
 
-  const isNightTime = !isDaytime();
-  if (isNightTime) {
-    document.body.classList.add('night-gradient');
-  }
+  if (!isDaytime()) document.body.classList.add('night-gradient');
 
-  /**
-   * requesting fonts here before the dynamic text on GameOver starts
-   */
+  // Preload fonts used by dynamic scenes
   WebFont.load({
-    custom: {
-      families: ['Whitney', 'WhitneyBold', 'WhitneyLightItal', 'Pixelify Sans'],
-    },
-    active: _ => {
-      console.log('---- webfont active');
-    },
+    custom: { families: ['Whitney', 'WhitneyBold', 'WhitneyLightItal', 'Pixelify Sans'] },
+    active: () => console.log('---- webfont active'),
   });
 
   const game = new Phaser.Game({
@@ -79,7 +79,6 @@ async function initGame() {
     height: GAME_HEIGHT,
     parent: 'parentContainer',
     transparent: true,
-
     scene: [ApiCheck, SplashScreen, StartScreen, SelectPlayer, SelectStage, TutorialScreen, Game, GameOver, ErrorScene],
     pack: {
       files: [
@@ -93,12 +92,7 @@ async function initGame() {
     },
     physics: {
       default: 'arcade',
-      arcade: {
-        gravity: {
-          y: 800,
-        },
-        debug: false,
-      },
+      arcade: { gravity: { y: 800 }, debug: false },
     },
   });
 
@@ -112,18 +106,18 @@ export default initGame();
 
 // Helper to rewrite all imports in remote scene source
 const importMap = {
-  'scenes/': 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/scenes/',
-  'scenes/LoaderT.js': 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/scenes/LoaderT.js',
-  utils: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/utils.js',
-  facts: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/facts.js',
-  resize: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/resize.js',
-  extralife: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/ExtraLife.js',
-  datamanager: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/DataManager.js',
-  apiservice: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/ApiService.js',
-  config: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/Config.js',
-  checkbox: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/elements/Checkbox.js',
-  checksdialog: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/elements/ChecksDialog.js',
-  player: 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/lib/Player.js',
+  'scenes/': `${BASE_URL}/src/scenes/`,
+  'scenes/LoaderT.js': `${BASE_URL}/src/scenes/LoaderT.js`,
+  utils: `${BASE_URL}/src/game/utils.js`,
+  facts: `${BASE_URL}/src/game/facts.js`,
+  resize: `${BASE_URL}/src/game/resize.js`,
+  extralife: `${BASE_URL}/src/game/ExtraLife.js`,
+  datamanager: `${BASE_URL}/src/game/DataManager.js`,
+  apiservice: `${BASE_URL}/src/game/ApiService.js`,
+  config: `${BASE_URL}/src/game/Config.js`,
+  checkbox: `${BASE_URL}/src/elements/Checkbox.js`,
+  checksdialog: `${BASE_URL}/src/elements/ChecksDialog.js`,
+  player: `${BASE_URL}/src/lib/Player.js`,
 };
 
 function rewriteImports(src, sceneDir = '/src/scenes') {
@@ -146,21 +140,19 @@ function rewriteImports(src, sceneDir = '/src/scenes') {
       return `import ${imports} from '${mapped}'`;
     } else {
       // Proxy for remote
-      return `import ${imports} from 'http://localhost:3001/proxy/https://deltaskyhopper.com${mapped.replace('./', '/')}'`;
+      return `import ${imports} from '${BASE_URL}${mapped.replace('./', '/')}'`;
     }
   });
   // Replace all relative imports with proxy URLs, but skip if already absolute
   src = src.replace(/import\s+([\w{}*, ]+)\s+from\s+['"]((\.{1,2}\/)[^'\"]+)['"]/g, (match, imports, relPath) => {
     if (/^https?:\/\//.test(relPath)) return match;
     // Compute absolute URL for the proxy
-    const absUrl = `http://localhost:3001/proxy/https://deltaskyhopper.com${sceneDir}/${relPath}`
-      .replace(/\/\.\//g, '/')
-      .replace(/\/[^/]+\/\.\.\//g, '/');
+    const absUrl = `${BASE_URL}${sceneDir}/${relPath}`.replace(/\/\.\//g, '/').replace(/\/[^/]+\/\.\.\//g, '/');
     return `import ${imports} from '${absUrl}'`;
   });
   src = src
     .replace(
-      "import ApiService from 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/ApiService.js'",
+      `import ApiService from '${BASE_URL}/src/game/ApiService.js'`,
       "\nconst apiServiceRemoteUrl = 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/ApiService.js';\n" +
         'let ApiService;\n' +
         'let apiServiceSrc = await (await fetch(apiServiceRemoteUrl)).text();\n' +
@@ -176,7 +168,7 @@ function rewriteImports(src, sceneDir = '/src/scenes') {
         '}\n'
     )
     .replace(
-      "import Config from 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/Config.js';\n",
+      `import Config from '${BASE_URL}/src/game/Config.js';`,
       "\nconst configRemoteUrl = 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/Config.js';\n" +
         'let Config;\n' +
         'let configSrc = await (await fetch(configRemoteUrl)).text();\n' +
@@ -193,7 +185,7 @@ function rewriteImports(src, sceneDir = '/src/scenes') {
         '}\n'
     )
     .replace(
-      "import ChecksDialog from 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/elements/ChecksDialog.js'\n",
+      `import ChecksDialog from '${BASE_URL}/src/elements/ChecksDialog.js'`,
       "\nconst checksDialogRemoteUrl = 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/elements/ChecksDialog.js';\n" +
         'let ChecksDialog;\n' +
         'let checksDialogSrc = await (await fetch(checksDialogRemoteUrl)).text();\n' +
