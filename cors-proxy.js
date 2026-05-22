@@ -60,7 +60,11 @@ app.use('/proxy', async (req, res) => {
     }
 
     // Make the request to the target server
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'ngrok-skip-browser-warning': '69420',
+      },
+    });
 
     // Set the response status
     res.status(response.status);
