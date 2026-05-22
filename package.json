@@ -6,12 +6,15 @@
   "author": "",
   "type": "module",
   "main": "src/main.js",
+  "homepage": "https://eastcoastcoder.github.io/Skyhopper-Proxy",
   "scripts": {
     "start": "vite",
     "cors-proxy": "node cors-proxy.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
@@ -20,6 +23,7 @@
     "webfontloader": "^1.6.26"
   },
   "devDependencies": {
+    "gh-pages": "^5.0.0",
     "vite": "^5.0.0"
   }
 }
