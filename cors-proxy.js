@@ -17,23 +17,39 @@ app.use((req, res, next) => {
 
 // Support path-based proxying so module-relative imports resolve correctly.
 // Examples:
-//  - /proxy/https://deltaskyhopper.com/src/scenes/StartScreen.js
 //  - /proxy?url=https://deltaskyhopper.com/src/scenes/StartScreen.js
+//  - /proxy/https%3A%2F%2Fdeltaskyhopper.com%2Fstyle.css (URL-encoded)
 app.use('/proxy', async (req, res) => {
-  console.log('proxy request', { originalUrl: req.originalUrl, path: req.path, url: req.url });
   try {
-    // Try to get the target from the path after /proxy/
-    // req.path is the path portion after the mount, e.g. '/https://.../file.js'
-    let target = '';
-    if (req.path && req.path !== '/') {
-      target = req.path.replace(/^\//, '');
-    } else {
-      target = req.query.url || req.query.u || '';
+    // Get target from query parameter first (most reliable), then path
+    let target = req.query.url || req.query.u || '';
+
+    if (!target && req.path && req.path !== '/') {
+      // Extract from path and handle both encoded and unencoded URLs
+      let pathPart = req.path.replace(/^\//, '');
+
+      // If it looks like a URL with ://, try to decode it
+      if (pathPart.includes('%3A') || pathPart.includes('%2F')) {
+        target = decodeURIComponent(pathPart);
+      } else if (pathPart.startsWith('http')) {
+        // Handle unencoded paths by reconstructing from remaining segments
+        target = pathPart;
+      }
     }
 
     if (!target) return res.status(400).send('Missing target URL');
-    const decoded = decodeURIComponent(target);
-    const url = decoded.startsWith('http') ? decoded : `https://${decoded}`;
+
+    const url = target.startsWith('http') ? target : `https://${target}`;
+
+    // Security: only allow deltaskyhopper.com
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.hostname !== 'deltaskyhopper.com') {
+        return res.status(412).send('Precondition Failed: only deltaskyhopper.com is allowed');
+      }
+    } catch (e) {
+      return res.status(400).send('Invalid URL');
+    }
 
     const response = await fetch(url);
     res.status(response.status);

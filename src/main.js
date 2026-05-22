@@ -1,4 +1,10 @@
-const BASE_URL = 'http://localhost:3001/proxy/https://deltaskyhopper.com';
+const BASE_URL = import.meta.env.VITE_BASE_URL;
+
+// Load stylesheet dynamically using BASE_URL
+const link = document.createElement('link');
+link.rel = 'stylesheet';
+link.href = `${BASE_URL}/style.css`;
+document.head.appendChild(link);
 
 async function importFromSource(source) {
   const blob = new Blob([source], { type: 'application/javascript' });
@@ -153,7 +159,7 @@ function rewriteImports(src, sceneDir = '/src/scenes') {
   src = src
     .replace(
       `import ApiService from '${BASE_URL}/src/game/ApiService.js'`,
-      "\nconst apiServiceRemoteUrl = 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/ApiService.js';\n" +
+      `\nconst apiServiceRemoteUrl = '${BASE_URL}/src/game/ApiService.js';\n` +
         'let ApiService;\n' +
         'let apiServiceSrc = await (await fetch(apiServiceRemoteUrl)).text();\n' +
         "apiServiceSrc = apiServiceSrc.replace('console.log(\\'USER DATA:\\', pseudoid, flightId)', 'return {};')\n" +
@@ -169,7 +175,7 @@ function rewriteImports(src, sceneDir = '/src/scenes') {
     )
     .replace(
       `import Config from '${BASE_URL}/src/game/Config.js';`,
-      "\nconst configRemoteUrl = 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/Config.js';\n" +
+      `\nconst configRemoteUrl = '${BASE_URL}/src/game/Config.js';\n` +
         'let Config;\n' +
         'let configSrc = await (await fetch(configRemoteUrl)).text();\n' +
         'configSrc = configSrc\n' +
@@ -186,12 +192,12 @@ function rewriteImports(src, sceneDir = '/src/scenes') {
     )
     .replace(
       `import ChecksDialog from '${BASE_URL}/src/elements/ChecksDialog.js'`,
-      "\nconst checksDialogRemoteUrl = 'http://localhost:3001/proxy/https://deltaskyhopper.com/src/elements/ChecksDialog.js';\n" +
+      `\nconst checksDialogRemoteUrl = '${BASE_URL}/src/elements/ChecksDialog.js';\n` +
         'let ChecksDialog;\n' +
         'let checksDialogSrc = await (await fetch(checksDialogRemoteUrl)).text();\n' +
         'checksDialogSrc = checksDialogSrc\n' +
-        '  .replace(\'import { addButtonReactions } from "utils";\', \'import { addButtonReactions } from "http://localhost:3001/proxy/https://deltaskyhopper.com/src/game/utils.js";\')\n' +
-        '  .replace(\'import Checkbox from \"checkbox\";\', \'import Checkbox from "http://localhost:3001/proxy/https://deltaskyhopper.com/src/elements/Checkbox.js";\');\n' +
+        `  .replace('import { addButtonReactions } from "utils";', 'import { addButtonReactions } from "${BASE_URL}/src/game/utils.js";')\n` +
+        `  .replace('import Checkbox from \"checkbox\";', 'import Checkbox from "${BASE_URL}/src/elements/Checkbox.js";');\n` +
         "const checksDialogBlob = new Blob([checksDialogSrc], { type: 'application/javascript' });\n" +
         'const checksDialogBlobUrl = URL.createObjectURL(checksDialogBlob);\n' +
         'try {\n' +
