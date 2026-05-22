@@ -29,6 +29,8 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+        env:
+          VITE_BASE_URL: ${{ secrets.VITE_BASE_URL }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v4
