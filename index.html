@@ -1,0 +1,53 @@
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delta Skyhopper</title>
+  <link href="style.css" rel="stylesheet" type="text/css">
+  <!-- <script async="" src="https://www.googletagmanager.com/gtm.js?id=GTM-TWP5MVGW"></script> -->
+  <script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js"></script>
+
+
+  <!-- Un-minified -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@v3.88.2/dist/phaser.js"></script>
+  <!-- Minified -->
+  <!-- <script src="https://cdn.jsdelivr.net/npm/phaser@v3.88.2/dist/phaser.min.js"></script> -->
+
+  <!-- Google Tag Manager -->
+  <!-- <script>(function (w, d, s, l, i) { w[l] = w[l] || []; w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' }); var f = d.getElementsByTagName(s)[0], j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f); })(window, document, 'script', 'dataLayer', 'GTM-TWP5MVGW');</script> -->
+  <!-- End Google Tag Manager -->
+
+
+
+  <script type="importmap">
+      {
+        "imports": {
+          "scenes/": "./src/scenes/",
+          "utils": "./src/game/utils.js",
+          "facts": "./src/game/facts.js",
+          "resize": "./src/game/resize.js",
+          "extralife": "./src/game/ExtraLife.js",
+          "datamanager": "./src/game/DataManager.js",
+          "apiservice": "./src/game/ApiService.js",
+          "config": "./src/game/Config.js",
+          "checkbox": "./src/elements/Checkbox.js",
+          "checksdialog": "./src/elements/ChecksDialog.js",
+          "player": "./src/lib/Player.js"
+        }
+      }
+    </script>
+
+</head>
+
+<body oncontextmenu="return false;" class="night-gradient desktop-enforcer" cz-shortcut-listen="true">
+  <div class="absolute-fill portrait-message desktop-enforcer">
+    <!-- <img src="./assets/ui/desktop-message.jpg"> -->
+  </div>
+  <div id="parentContainer">
+  </div>
+  <script type="module" src="/src/main.js"></script>
+
+</body>
+
+</html>
