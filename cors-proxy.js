@@ -4,13 +4,19 @@ import express from 'express';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Global CORS middleware - applies to all routes
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Accept,Origin');
+  // Allow your GitHub Pages domain specifically
+  const allowedOrigin = 'https://eastcoastcoder.github.io';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Origin, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Expose-Headers', '*');
+
+  // Handle preflight requests immediately
   if (req.method === 'OPTIONS') {
-    res.sendStatus(204);
-    return;
+    return res.sendStatus(200);
   }
   next();
 });
@@ -37,7 +43,9 @@ app.use('/proxy', async (req, res) => {
       }
     }
 
-    if (!target) return res.status(400).send('Missing target URL');
+    if (!target) {
+      return res.status(400).send('Missing target URL');
+    }
 
     const url = target.startsWith('http') ? target : `https://${target}`;
 
@@ -51,21 +59,49 @@ app.use('/proxy', async (req, res) => {
       return res.status(400).send('Invalid URL');
     }
 
+    // Make the request to the target server
     const response = await fetch(url);
+
+    // Set the response status
     res.status(response.status);
+
+    // Copy headers from the target response, but skip problematic ones
     response.headers.forEach((value, key) => {
-      if (key.toLowerCase() === 'content-encoding') return;
-      // Avoid exposing hop-by-hop headers that may interfere
-      if (['transfer-encoding', 'connection'].includes(key.toLowerCase())) return;
+      const lowerKey = key.toLowerCase();
+      // Skip headers that would cause issues
+      if (lowerKey === 'content-encoding') return;
+      if (lowerKey === 'transfer-encoding') return;
+      if (lowerKey === 'connection') return;
+      // Skip CORS headers - we'll force our own
+      if (lowerKey === 'access-control-allow-origin') return;
+      if (lowerKey === 'access-control-allow-credentials') return;
+      if (lowerKey === 'access-control-expose-headers') return;
+
       res.setHeader(key, value);
     });
+
+    // FORCE our CORS headers to override anything from the target
+    res.setHeader('Access-Control-Allow-Origin', 'https://eastcoastcoder.github.io');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Expose-Headers', '*');
+
+    // Send the response body
     const buf = Buffer.from(await response.arrayBuffer());
     res.send(buf);
   } catch (err) {
+    console.error('Proxy error:', err);
     res.status(500).send(`Proxy error: ${err.message}`);
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`CORS proxy running on http://localhost:${PORT}`);
+// Health check endpoint (optional)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Start the server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`CORS proxy running on http://0.0.0.0:${PORT}`);
+  console.log(`Allowed origin: https://eastcoastcoder.github.io`);
+  console.log(`Proxy endpoint: http://0.0.0.0:${PORT}/proxy/`);
 });
