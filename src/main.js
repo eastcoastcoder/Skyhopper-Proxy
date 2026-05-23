@@ -1,10 +1,24 @@
 const BASE_URL = import.meta.env.VITE_BASE_URL ?? import.meta.env.BASE_URL ?? '/';
 
-// Load stylesheet dynamically using BASE_URL
-const link = document.createElement('link');
-link.rel = 'stylesheet';
-link.href = `${BASE_URL}/style.css`;
-document.head.appendChild(link);
+async function loadProxiedCSS() {
+  try {
+    const cssUrl = `${BASE_URL}/style.css`;
+    const response = await fetch(cssUrl);
+    let cssText = await response.text();
+
+    // Rewrite all asset URLs (fonts, images, etc.) to use the proxy
+    cssText = cssText.replace(/url\(['"]?(assets\/[^'"\)]+)['"]?\)/gi, (match, path) => `url('${BASE_URL}/${path}')`);
+
+    const styleTag = document.createElement('style');
+    styleTag.textContent = cssText;
+    document.head.appendChild(styleTag);
+  } catch (error) {
+    console.error('Failed to load proxied CSS:', error);
+  }
+}
+
+// Replace your existing link loading with this
+loadProxiedCSS();
 
 async function importFromSource(source) {
   const blob = new Blob([source], { type: 'application/javascript' });
